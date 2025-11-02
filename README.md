@@ -2,6 +2,64 @@
 
 A TypeScript-based REST API for scraping Steam market data using Puppeteer and Express.
 
+I've decided to build this cause I think it's outrageous that valve don't provide their own steam market api, since it's the most used video game item market on the internet and the items on there HAVE REAL VALUE.
+
+Also fuck the people that charge 10+ euros a month for a simple web scraper market api, they are greedy assholes.
+
+## Installation
+
+```bash
+npm install
+```
+
+## Configuration
+
+**IMPORTANT:** Before running the server, you must configure your own API keys.
+
+### Setting Up API Keys
+
+1. Open the `.env` file in the project root directory
+2. Modify the `VALID_API_KEYS` variable to include your own custom API keys:
+
+```env
+# Server Configuration
+PORT=3000
+
+# Valid API Keys (comma-separated)
+# REPLACE 'your-secret-api-key-here' WITH YOUR OWN SECURE API KEY(S)
+VALID_API_KEYS=your-secret-api-key-here
+
+# Environment
+NODE_ENV=development
+```
+
+### API Key Guidelines
+
+- **Keep them secure** - API keys should be treated like passwords
+- **Use strong keys** - Generate random, hard-to-guess strings
+- **Multiple keys** - You can add multiple keys separated by commas:
+  ```env
+  VALID_API_KEYS=key1-abc123,key2-def456,key3-ghi789
+  ```
+
+### Example: Generating a Secure API Key
+
+You can generate a random API key using Node.js:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Or use any random string generator. Example result:
+
+```env
+VALID_API_KEYS=9a4f2c8d5b7e3a1f6d9e2b8c5a7f3d1e
+```
+
+**Remember:** Restart the server after modifying the `.env` file.
+
+## Usage
+
 ### Development Mode
 
 ```bash
@@ -179,6 +237,8 @@ Prices are fetched in USD from Steam and converted to EUR if requested.
 
 ## Notes
 
+- **Security:** Always replace the default API key (`your-secret-api-key-here`) with your own secure keys before deploying or sharing this API.
+- **Environment Variables:** The `.env` file contains sensitive information. Never commit it to version control (it's already in `.gitignore`).
 - The scraper runs in **non-headless mode** by default (browser is visible). Set `headless: true` in `SteamMarketScraper.ts` for production.
 - Browser instance is initialized on first API request and reused for subsequent requests.
 - Be respectful of Steam's servers - the scraper includes built-in delays.
