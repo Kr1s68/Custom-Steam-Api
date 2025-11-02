@@ -5,7 +5,8 @@
       "Bash(npm install puppeteer)",
       "Bash(npm install express)",
       "Bash(npm install --save-dev @types/express)",
-      "Bash(npm install dotenv)"
+      "Bash(npm install dotenv)",
+      "Bash(npm install @sparticuz/chromium puppeteer-core)"
     ],
     "deny": [],
     "ask": []

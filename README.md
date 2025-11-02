@@ -156,6 +156,78 @@ docker run -e VALID_API_KEYS=your-key steam-market-scraper
 
 **Via .env file** (mounted as volume in docker-compose.yml)
 
+## Vercel Deployment
+
+### Prerequisites
+
+- Vercel account (free tier works)
+- Vercel CLI installed: `npm install -g vercel`
+
+### Important Notes for Vercel
+
+⚠️ **Serverless Limitations:**
+- Vercel functions have a **50MB size limit** (Pro: 250MB)
+- **60-second timeout** on Hobby plan (Pro: up to 5 minutes)
+- Each request starts a new instance (no browser reuse between requests)
+- Cold starts can take 5-10 seconds
+- Scraping may be slower than Docker/VPS deployment
+
+### Deployment Steps
+
+1. **Install Dependencies** (already done):
+   ```bash
+   npm install @sparticuz/chromium puppeteer-core
+   ```
+
+2. **Build the Project**:
+   ```bash
+   npm run build
+   ```
+
+3. **Set Environment Variables in Vercel**:
+   - Go to your Vercel project settings
+   - Add environment variables:
+     - `VALID_API_KEYS` = your-api-key
+     - `NODE_ENV` = production
+
+4. **Deploy**:
+   ```bash
+   # Login to Vercel
+   vercel login
+
+   # Deploy
+   vercel --prod
+   ```
+
+### Alternative: Deploy via Vercel Dashboard
+
+1. Push your code to GitHub/GitLab/Bitbucket
+2. Import project in Vercel Dashboard
+3. Set environment variables in project settings
+4. Deploy automatically
+
+### Vercel Configuration
+
+The project includes `vercel.json` with optimized settings:
+- **Memory**: 3008MB (maximum on Hobby plan)
+- **Timeout**: 60 seconds
+- **Max Lambda Size**: 50MB
+
+### Testing on Vercel
+
+After deployment, test your API:
+```bash
+curl -H "x-api-key: YOUR_API_KEY" \
+  "https://your-project.vercel.app/api/item?appId=730&itemName=AK-47%20|%20Redline%20(Field-Tested)&currency=USD"
+```
+
+### Recommendations
+
+For production use, consider:
+- **Docker on VPS/Cloud** for better performance and browser reuse
+- **Vercel Pro Plan** for longer timeouts and larger functions
+- **Dedicated headless browser service** (e.g., Browserless.io) for high-traffic scenarios
+
 ## Project Structure
 
 ```
@@ -294,14 +366,16 @@ GET /api/item?appId=730&itemName=AK-47 | Redline (Field-Tested)&currency=EUR&api
 
 - **REST API** with Express.js
 - **Docker Support** - Fully containerized with Docker and Docker Compose
+- **Vercel Deployment** - Ready for serverless deployment with optimized Chromium
 - **API Key Authentication** - Secure access control with configurable API keys
 - **Currency Conversion** between USD and EUR (hardcoded rate: 1.154730220179047)
 - **Automatic Retry Logic** with configurable retries
-- **Browser Reuse** - Single browser instance shared across requests
+- **Browser Reuse** - Single browser instance shared across requests (local/Docker)
 - **Type-Safe** with TypeScript interfaces
 - **Error Handling** with descriptive error messages
 - **Health Checks** - Built-in health check endpoint for monitoring
 - **Production Ready** - Automatically runs in headless mode in production
+- **Multi-Environment** - Works seamlessly in local, Docker, and serverless environments
 
 ## Currency Support
 

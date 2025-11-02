@@ -1,4 +1,4 @@
-import puppeteer, { Browser, Page } from "puppeteer";
+import { Browser, Page } from "puppeteer";
 import { Currency, ItemDetails } from "../types/types";
 
 export class SteamMarketScraper {
@@ -9,16 +9,39 @@ export class SteamMarketScraper {
   async initialize(): Promise<void> {
     console.log("Launching browser...");
     const isProduction = process.env.NODE_ENV === "production";
+    const isVercel = process.env.VERCEL === "1";
 
-    this.browser = await puppeteer.launch({
-      headless: isProduction ? true : false, // Headless in production, visible in development
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-      ],
-    });
+    // Use different Puppeteer versions based on environment
+    if (isVercel) {
+      // Vercel/Serverless environment - use puppeteer-core with @sparticuz/chromium
+      const chromium = require("@sparticuz/chromium");
+      const puppeteerCore = require("puppeteer-core");
+
+      this.browser = await puppeteerCore.launch({
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+      });
+    } else {
+      // Local/Docker environment - use regular puppeteer
+      const puppeteer = require("puppeteer");
+
+      this.browser = await puppeteer.launch({
+        headless: isProduction ? true : false,
+        args: [
+          "--no-sandbox",
+          "--disable-setuid-sandbox",
+          "--disable-dev-shm-usage",
+          "--disable-gpu",
+        ],
+      });
+    }
+
+    // Ensure browser was initialized successfully
+    if (!this.browser) {
+      throw new Error("Failed to initialize browser");
+    }
 
     this.page = await this.browser.newPage();
 

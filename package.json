@@ -22,8 +22,10 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@sparticuz/chromium": "^141.0.0",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
-    "puppeteer": "^24.27.0"
+    "puppeteer": "^24.27.0",
+    "puppeteer-core": "^24.27.0"
   }
 }
