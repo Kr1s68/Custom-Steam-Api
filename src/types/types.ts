@@ -8,11 +8,11 @@ export interface ItemDetails {
   appId: string;
   marketHashName: string;
   currency: Currency;
-  lowestPrice: string;
-  medianPrice: string;
-  volume: string;
-  highestBuyOrder: { price: string; quantity: string } | null;
-  lowestSellOrder: { price: string; quantity: string } | null;
+  lowestPrice: number;
+  medianPrice: number;
+  volume: number;
+  highestBuyOrder: { price: number; quantity: number } | null;
+  lowestSellOrder: { price: number; quantity: number } | null;
   imageUrl: string;
   url: string;
 }

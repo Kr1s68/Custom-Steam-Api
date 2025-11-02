@@ -56,21 +56,23 @@ export class SteamMarketScraper {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  private convertPrice(priceString: string, targetCurrency: Currency): string {
+  private parsePrice(priceString: string): number {
     // Extract numeric value from price string (e.g., "$47.87 USD" -> 47.87)
     const match = priceString.match(/[\d,.]+/);
-    if (!match) return priceString;
+    if (!match) return 0;
 
     const numericValue = parseFloat(match[0].replace(/,/g, ""));
-    if (isNaN(numericValue)) return priceString;
+    return isNaN(numericValue) ? 0 : numericValue;
+  }
 
+  private convertPrice(priceUSD: number, targetCurrency: Currency): number {
     // Prices from Steam are always in USD, convert if needed
     if (targetCurrency === Currency.EUR) {
-      const eurValue = numericValue / this.EUR_TO_USD_RATE;
-      return `€${eurValue.toFixed(2)} EUR`;
+      const eurValue = priceUSD / this.EUR_TO_USD_RATE;
+      return Math.round(eurValue * 100) / 100; // Round to 2 decimal places
     }
 
-    return priceString; // Return as-is for USD
+    return Math.round(priceUSD * 100) / 100; // Return USD rounded to 2 decimals
   }
 
   async scrapeItemByName(
@@ -249,28 +251,33 @@ export class SteamMarketScraper {
 
         console.log("✓ Successfully scraped item data");
 
-        // Convert prices to target currency
+        // Parse string prices to numbers and convert to target currency
+        const lowestPriceUSD = this.parsePrice(itemData.lowestPrice);
+        const medianPriceUSD = this.parsePrice(itemData.medianPrice);
+        const volumeNum = parseInt(itemData.volume.replace(/[^\d]/g, "")) || 0;
+
         const convertedData: ItemDetails = {
           ...itemData,
           currency: currency,
-          lowestPrice: this.convertPrice(itemData.lowestPrice, currency),
-          medianPrice: this.convertPrice(itemData.medianPrice, currency),
+          lowestPrice: this.convertPrice(lowestPriceUSD, currency),
+          medianPrice: this.convertPrice(medianPriceUSD, currency),
+          volume: volumeNum,
           highestBuyOrder: itemData.highestBuyOrder
             ? {
                 price: this.convertPrice(
-                  itemData.highestBuyOrder.price,
+                  this.parsePrice(itemData.highestBuyOrder.price),
                   currency
                 ),
-                quantity: itemData.highestBuyOrder.quantity,
+                quantity: parseInt(itemData.highestBuyOrder.quantity.replace(/[^\d]/g, "")) || 0,
               }
             : null,
           lowestSellOrder: itemData.lowestSellOrder
             ? {
                 price: this.convertPrice(
-                  itemData.lowestSellOrder.price,
+                  this.parsePrice(itemData.lowestSellOrder.price),
                   currency
                 ),
-                quantity: itemData.lowestSellOrder.quantity,
+                quantity: parseInt(itemData.lowestSellOrder.quantity.replace(/[^\d]/g, "")) || 0,
               }
             : null,
         };
