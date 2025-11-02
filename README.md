@@ -75,6 +75,87 @@ npm run build
 npm start
 ```
 
+## Docker Deployment
+
+### Prerequisites
+
+- Docker installed on your system
+- Docker Compose (optional, but recommended)
+
+### Option 1: Using Docker Compose (Recommended)
+
+1. **Configure API Keys** - Make sure your `.env` file has your API keys configured
+
+2. **Build and Run**:
+   ```bash
+   docker-compose up -d
+   ```
+
+3. **View Logs**:
+   ```bash
+   docker-compose logs -f steam-api
+   ```
+
+4. **Stop the Container**:
+   ```bash
+   docker-compose down
+   ```
+
+### Option 2: Using Docker CLI
+
+1. **Build the Image**:
+   ```bash
+   docker build -t steam-market-scraper .
+   ```
+
+2. **Run the Container**:
+   ```bash
+   docker run -d \
+     --name steam-api \
+     -p 3000:3000 \
+     -e VALID_API_KEYS=your-api-key-here \
+     --shm-size=2gb \
+     --security-opt seccomp=unconfined \
+     steam-market-scraper
+   ```
+
+3. **View Logs**:
+   ```bash
+   docker logs -f steam-api
+   ```
+
+4. **Stop the Container**:
+   ```bash
+   docker stop steam-api
+   docker rm steam-api
+   ```
+
+### Docker Configuration Notes
+
+- **Shared Memory**: `--shm-size=2gb` is required for Chromium to run properly
+- **Security**: `--security-opt seccomp=unconfined` allows Chromium sandbox to work in Docker
+- **Port**: Container exposes port 3000, mapped to host port 3000
+- **Health Check**: Container includes a health check on `/api/health` endpoint
+- **Resources**: Default limits are 2 CPUs and 2GB RAM (configurable in `docker-compose.yml`)
+
+### Environment Variables
+
+You can override environment variables in several ways:
+
+**Via docker-compose.yml:**
+```yaml
+environment:
+  - VALID_API_KEYS=your-key-1,your-key-2
+  - PORT=3000
+```
+
+**Via command line:**
+```bash
+docker run -e VALID_API_KEYS=your-key steam-market-scraper
+```
+
+**Via .env file** (mounted as volume in docker-compose.yml)
+
 ## Project Structure
 
 ```
@@ -212,12 +293,15 @@ GET /api/item?appId=730&itemName=AK-47 | Redline (Field-Tested)&currency=EUR&api
 ## Features
 
 - **REST API** with Express.js
+- **Docker Support** - Fully containerized with Docker and Docker Compose
 - **API Key Authentication** - Secure access control with configurable API keys
 - **Currency Conversion** between USD and EUR (hardcoded rate: 1.154730220179047)
 - **Automatic Retry Logic** with configurable retries
 - **Browser Reuse** - Single browser instance shared across requests
 - **Type-Safe** with TypeScript interfaces
 - **Error Handling** with descriptive error messages
+- **Health Checks** - Built-in health check endpoint for monitoring
+- **Production Ready** - Automatically runs in headless mode in production
 
 ## Currency Support
 
@@ -239,10 +323,11 @@ Prices are fetched in USD from Steam and converted to EUR if requested.
 
 - **Security:** Always replace the default API key (`your-secret-api-key-here`) with your own secure keys before deploying or sharing this API.
 - **Environment Variables:** The `.env` file contains sensitive information. Never commit it to version control (it's already in `.gitignore`).
-- The scraper runs in **non-headless mode** by default (browser is visible). Set `headless: true` in `SteamMarketScraper.ts` for production.
-- Browser instance is initialized on first API request and reused for subsequent requests.
-- Be respectful of Steam's servers - the scraper includes built-in delays.
-- The API handles SIGINT/SIGTERM for graceful shutdown and browser cleanup.
+- **Browser Mode:** The scraper automatically runs in headless mode when `NODE_ENV=production` (Docker), and visible mode in development.
+- **Browser Instance:** Initialized on first API request and reused for subsequent requests for better performance.
+- **Rate Limiting:** Be respectful of Steam's servers - the scraper includes built-in delays between requests.
+- **Graceful Shutdown:** The API handles SIGINT/SIGTERM for proper browser cleanup.
+- **Docker Resources:** When using Docker, ensure your host has sufficient resources (recommended: 2GB RAM minimum).
 
 ## Error Handling
 

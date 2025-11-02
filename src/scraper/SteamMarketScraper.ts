@@ -8,9 +8,16 @@ export class SteamMarketScraper {
 
   async initialize(): Promise<void> {
     console.log("Launching browser...");
+    const isProduction = process.env.NODE_ENV === "production";
+
     this.browser = await puppeteer.launch({
-      headless: false, // Set to true for production
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      headless: isProduction ? true : false, // Headless in production, visible in development
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+      ],
     });
 
     this.page = await this.browser.newPage();
