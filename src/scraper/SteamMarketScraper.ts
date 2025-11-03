@@ -1,78 +1,25 @@
-import { Browser, Page } from "puppeteer";
 import { Currency, ItemDetails } from "../types/types";
+import { BrowserManager } from "./BrowserManager";
+import { PageDataExtractor } from "./PageDataExtractor";
+import { ItemDataTransformer } from "./ItemDataTransformer";
 
 export class SteamMarketScraper {
-  private browser: Browser | null = null;
-  private page: Page | null = null;
-  private readonly EUR_TO_USD_RATE = 1.154730220179047;
+  private browserManager: BrowserManager;
+  private pageDataExtractor: PageDataExtractor;
+  private dataTransformer: ItemDataTransformer;
+
+  constructor() {
+    this.browserManager = new BrowserManager();
+    this.pageDataExtractor = new PageDataExtractor();
+    this.dataTransformer = new ItemDataTransformer();
+  }
 
   async initialize(): Promise<void> {
-    console.log("Launching browser...");
-    const isProduction = process.env.NODE_ENV === "production";
-    const isVercel = process.env.VERCEL === "1";
-
-    // Use different Puppeteer versions based on environment
-    if (isVercel) {
-      // Vercel/Serverless environment - use puppeteer-core with @sparticuz/chromium
-      const chromium = require("@sparticuz/chromium");
-      const puppeteerCore = require("puppeteer-core");
-
-      this.browser = await puppeteerCore.launch({
-        args: chromium.args,
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-      });
-    } else {
-      // Local/Docker environment - use regular puppeteer
-      const puppeteer = require("puppeteer");
-
-      this.browser = await puppeteer.launch({
-        headless: isProduction ? true : false,
-        args: [
-          "--no-sandbox",
-          "--disable-setuid-sandbox",
-          "--disable-dev-shm-usage",
-          "--disable-gpu",
-        ],
-      });
-    }
-
-    // Ensure browser was initialized successfully
-    if (!this.browser) {
-      throw new Error("Failed to initialize browser");
-    }
-
-    this.page = await this.browser.newPage();
-
-    // Set a realistic viewport and user agent
-    await this.page.setViewport({ width: 1920, height: 1080 });
-    await this.page.setUserAgent(
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    );
+    await this.browserManager.initialize();
   }
 
   private async delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  private parsePrice(priceString: string): number {
-    // Extract numeric value from price string (e.g., "$47.87 USD" -> 47.87)
-    const match = priceString.match(/[\d,.]+/);
-    if (!match) return 0;
-
-    const numericValue = parseFloat(match[0].replace(/,/g, ""));
-    return isNaN(numericValue) ? 0 : numericValue;
-  }
-
-  private convertPrice(priceUSD: number, targetCurrency: Currency): number {
-    // Prices from Steam are always in USD, convert if needed
-    if (targetCurrency === Currency.EUR) {
-      const eurValue = priceUSD / this.EUR_TO_USD_RATE;
-      return Math.round(eurValue * 100) / 100; // Round to 2 decimal places
-    }
-
-    return Math.round(priceUSD * 100) / 100; // Return USD rounded to 2 decimals
   }
 
   async scrapeItemByName(
@@ -82,9 +29,7 @@ export class SteamMarketScraper {
     maxRetries: number = 3,
     retryDelay: number = 2000
   ): Promise<ItemDetails> {
-    if (!this.page) {
-      throw new Error("Browser not initialized. Call initialize() first.");
-    }
+    const page = this.browserManager.getPage();
 
     let lastError: Error | null = null;
 
@@ -97,13 +42,13 @@ export class SteamMarketScraper {
         const itemUrl = `https://steamcommunity.com/market/listings/${appId}/${marketHashName}`;
 
         console.log(`Navigating to: ${itemUrl}`);
-        await this.page.goto(itemUrl, {
+        await page.goto(itemUrl, {
           waitUntil: "networkidle2",
           timeout: 30000,
         });
 
         // Wait for the page to load
-        await this.page.waitForSelector(".market_listing_largeimage", {
+        await page.waitForSelector(".market_listing_largeimage", {
           timeout: 15000,
         });
 
@@ -114,7 +59,7 @@ export class SteamMarketScraper {
         await this.delay(2000);
 
         try {
-          await this.page.waitForSelector(
+          await page.waitForSelector(
             "#market_commodity_buyrequests_table, #market_commodity_forsale_table, .market_commodity_orders_table",
             {
               timeout: 15000,
@@ -132,155 +77,15 @@ export class SteamMarketScraper {
 
         console.log("Scraping item details...");
 
-        const itemData = await this.page.evaluate(() => {
-          // Helper function to clean price strings
-          const cleanPrice = (text: string | null | undefined): string => {
-            if (!text) return "N/A";
-            return text.trim().replace(/\s+/g, " ");
-          };
-
-          // Get item name and image
-          const itemNameElement = document.querySelector(
-            ".market_listing_largeimage img"
-          ) as HTMLImageElement;
-          const imageUrl = itemNameElement?.src || "";
-          const itemName = itemNameElement?.alt || "";
-
-          // Get lowest price
-          const lowestPriceElement = document.querySelector(
-            ".market_listing_price_with_fee"
-          );
-          const lowestPrice = cleanPrice(lowestPriceElement?.textContent);
-
-          // Get median price
-          const medianPriceElement = document.querySelector(
-            ".market_commodity_orders_header_promote"
-          );
-          const medianPrice = cleanPrice(medianPriceElement?.textContent);
-
-          // Get volume (number sold in last 24 hours)
-          const volumeElement = document.querySelector(
-            ".market_commodity_orders_block:nth-child(2) span"
-          );
-          const volume = cleanPrice(volumeElement?.textContent);
-
-          // Get highest buy order (first row in buy orders table)
-          let highestBuyOrder: { price: string; quantity: string } | null =
-            null;
-
-          // Try multiple selectors for buy orders
-          let buyOrderRows = document.querySelectorAll(
-            "#market_commodity_buyrequests_table tbody tr"
-          );
-
-          if (buyOrderRows.length === 0) {
-            buyOrderRows = document.querySelectorAll(
-              "#market_commodity_buyrequests table tbody tr"
-            );
-          }
-
-          if (buyOrderRows.length === 0) {
-            buyOrderRows = document.querySelectorAll(
-              ".market_commodity_orders_table tbody tr"
-            );
-          }
-
-          // Get the second row (first row is header with <th>, second row has actual data)
-          if (buyOrderRows.length > 1) {
-            const dataRow = buyOrderRows[1]; // Skip header row at index 0
-            const cells = dataRow.querySelectorAll("td");
-            if (cells.length >= 2) {
-              highestBuyOrder = {
-                price: cleanPrice(cells[0]?.textContent),
-                quantity: cleanPrice(cells[1]?.textContent),
-              };
-            }
-          }
-
-          // Get lowest sell order (first row in sell orders table)
-          let lowestSellOrder: { price: string; quantity: string } | null =
-            null;
-
-          // Try multiple selectors for sell orders
-          let sellOrderRows = document.querySelectorAll(
-            "#market_commodity_forsale_table tbody tr"
-          );
-
-          if (sellOrderRows.length === 0) {
-            sellOrderRows = document.querySelectorAll(
-              "#market_commodity_forsale table tbody tr"
-            );
-          }
-
-          if (sellOrderRows.length === 0) {
-            sellOrderRows = document.querySelectorAll(
-              ".market_commodity_orders_table tbody tr"
-            );
-          }
-
-          // Get the second row (first row is header with <th>, second row has actual data)
-          if (sellOrderRows.length > 1) {
-            const dataRow = sellOrderRows[1]; // Skip header row at index 0
-            const cells = dataRow.querySelectorAll("td");
-            if (cells.length >= 2) {
-              lowestSellOrder = {
-                price: cleanPrice(cells[0]?.textContent),
-                quantity: cleanPrice(cells[1]?.textContent),
-              };
-            }
-          }
-
-          // Get app ID and market hash name from URL
-          const urlParts = window.location.pathname.split("/");
-          const appId = urlParts[3] || "";
-          const marketHashName = decodeURIComponent(urlParts[4] || "");
-
-          return {
-            itemName,
-            appId,
-            marketHashName,
-            lowestPrice,
-            medianPrice,
-            volume,
-            highestBuyOrder,
-            lowestSellOrder,
-            imageUrl,
-            url: window.location.href,
-          };
-        });
+        const itemData = await this.pageDataExtractor.extractItemData(page);
 
         console.log("✓ Successfully scraped item data");
 
-        // Parse string prices to numbers and convert to target currency
-        const lowestPriceUSD = this.parsePrice(itemData.lowestPrice);
-        const medianPriceUSD = this.parsePrice(itemData.medianPrice);
-        const volumeNum = parseInt(itemData.volume.replace(/[^\d]/g, "")) || 0;
-
-        const convertedData: ItemDetails = {
-          ...itemData,
-          currency: currency,
-          lowestPrice: this.convertPrice(lowestPriceUSD, currency),
-          medianPrice: this.convertPrice(medianPriceUSD, currency),
-          volume: volumeNum,
-          highestBuyOrder: itemData.highestBuyOrder
-            ? {
-                price: this.convertPrice(
-                  this.parsePrice(itemData.highestBuyOrder.price),
-                  currency
-                ),
-                quantity: parseInt(itemData.highestBuyOrder.quantity.replace(/[^\d]/g, "")) || 0,
-              }
-            : null,
-          lowestSellOrder: itemData.lowestSellOrder
-            ? {
-                price: this.convertPrice(
-                  this.parsePrice(itemData.lowestSellOrder.price),
-                  currency
-                ),
-                quantity: parseInt(itemData.lowestSellOrder.quantity.replace(/[^\d]/g, "")) || 0,
-              }
-            : null,
-        };
+        // Transform raw data to ItemDetails with proper currency conversion
+        const convertedData = this.dataTransformer.transformToItemDetails(
+          itemData,
+          currency
+        );
 
         return convertedData;
       } catch (error) {
@@ -296,7 +101,7 @@ export class SteamMarketScraper {
 
           // Optionally reload the page for a fresh start
           try {
-            await this.page.reload({
+            await page.reload({
               waitUntil: "networkidle2",
               timeout: 10000,
             });
@@ -314,11 +119,6 @@ export class SteamMarketScraper {
   }
 
   async close(): Promise<void> {
-    if (this.browser) {
-      console.log("Closing browser...");
-      await this.browser.close();
-      this.browser = null;
-      this.page = null;
-    }
+    await this.browserManager.close();
   }
 }
