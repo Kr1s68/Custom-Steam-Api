@@ -345,18 +345,16 @@ GET /api/item?appId=730&itemName=AK-47 | Redline (Field-Tested)&currency=EUR&api
     "appId": "730",
     "marketHashName": "AK-47 | Redline (Field-Tested)",
     "currency": "EUR",
-    "lowestPrice": "€41.42 EUR",
-    "medianPrice": "€48.31 EUR",
-    "volume": "150",
+    "lowestPrice": 41.42,
+    "volume": 150,
     "highestBuyOrder": {
-      "price": "€40.50 EUR",
-      "quantity": "25"
+      "price": 40.5,
+      "quantity": 25
     },
     "lowestSellOrder": {
-      "price": "€41.42 EUR",
-      "quantity": "10"
+      "price": 41.42,
+      "quantity": 10
     },
-    "imageUrl": "https://...",
     "url": "https://steamcommunity.com/market/listings/730/AK-47%20%7C%20Redline%20%28Field-Tested%29"
   }
 }
