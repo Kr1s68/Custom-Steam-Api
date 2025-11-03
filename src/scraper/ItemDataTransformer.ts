@@ -15,14 +15,12 @@ export class ItemDataTransformer {
   ): ItemDetails {
     // Parse string prices to numbers and convert to target currency
     const lowestPriceUSD = this.priceConverter.parsePrice(rawData.lowestPrice);
-    const medianPriceUSD = this.priceConverter.parsePrice(rawData.medianPrice);
     const volumeNum = this.priceConverter.parseQuantity(rawData.volume);
 
     const convertedData: ItemDetails = {
       ...rawData,
       currency: targetCurrency,
       lowestPrice: this.priceConverter.convertPrice(lowestPriceUSD, targetCurrency),
-      medianPrice: this.priceConverter.convertPrice(medianPriceUSD, targetCurrency),
       volume: volumeNum,
       highestBuyOrder: rawData.highestBuyOrder
         ? {

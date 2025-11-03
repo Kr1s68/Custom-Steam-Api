@@ -9,10 +9,8 @@ export interface ItemDetails {
   marketHashName: string;
   currency: Currency;
   lowestPrice: number;
-  medianPrice: number;
   volume: number;
   highestBuyOrder: { price: number; quantity: number } | null;
   lowestSellOrder: { price: number; quantity: number } | null;
-  imageUrl: string;
   url: string;
 }

@@ -5,11 +5,9 @@ export interface RawItemData {
   appId: string;
   marketHashName: string;
   lowestPrice: string;
-  medianPrice: string;
   volume: string;
   highestBuyOrder: { price: string; quantity: string } | null;
   lowestSellOrder: { price: string; quantity: string } | null;
-  imageUrl: string;
   url: string;
 }
 
@@ -22,11 +20,10 @@ export class PageDataExtractor {
         return text.trim().replace(/\s+/g, " ");
       };
 
-      // Get item name and image
+      // Get item name
       const itemNameElement = document.querySelector(
         ".market_listing_largeimage img"
       ) as HTMLImageElement;
-      const imageUrl = itemNameElement?.src || "";
       const itemName = itemNameElement?.alt || "";
 
       // Get lowest price
@@ -34,12 +31,6 @@ export class PageDataExtractor {
         ".market_listing_price_with_fee"
       );
       const lowestPrice = cleanPrice(lowestPriceElement?.textContent);
-
-      // Get median price
-      const medianPriceElement = document.querySelector(
-        ".market_commodity_orders_header_promote"
-      );
-      const medianPrice = cleanPrice(medianPriceElement?.textContent);
 
       // Get volume (number sold in last 24 hours)
       const volumeElement = document.querySelector(
@@ -123,11 +114,9 @@ export class PageDataExtractor {
         appId,
         marketHashName,
         lowestPrice,
-        medianPrice,
         volume,
         highestBuyOrder,
         lowestSellOrder,
-        imageUrl,
         url: window.location.href,
       };
     });
