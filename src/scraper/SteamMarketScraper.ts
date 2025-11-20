@@ -22,6 +22,51 @@ export class SteamMarketScraper {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
+  private async debugPageState(page: any): Promise<string> {
+    try {
+      const pageInfo = await page.evaluate(() => {
+        const url = window.location.href;
+        const title = document.title;
+        const hasAgeGate = !!document.querySelector(".agegate_birthday_selector");
+        const hasError = !!document.querySelector(".error_ctn");
+        const bodyText = document.body.innerText.substring(0, 500);
+
+        // Check for various market-related elements
+        const marketElements = {
+          largeImage: !!document.querySelector(".market_listing_largeimage"),
+          itemImg: !!document.querySelector(".market_listing_item_img"),
+          pageFullWidth: !!document.querySelector(".market_page_fullwidth"),
+          listingNav: !!document.querySelector(".market_listing_nav"),
+          largeItemInfo: !!document.querySelector("#largeiteminfo"),
+          priceElement: !!document.querySelector(".market_listing_price_with_fee"),
+          orderTables: !!document.querySelector(".market_commodity_orders_table"),
+        };
+
+        // Get all divs with market-related classes
+        const allMarketClasses: string[] = [];
+        document.querySelectorAll('[class*="market"]').forEach((el) => {
+          if (el.className && typeof el.className === 'string') {
+            allMarketClasses.push(el.className);
+          }
+        });
+
+        return {
+          url,
+          title,
+          hasAgeGate,
+          hasError,
+          marketElements,
+          firstFewMarketClasses: allMarketClasses.slice(0, 10),
+          bodyText,
+        };
+      });
+
+      return JSON.stringify(pageInfo, null, 2);
+    } catch (error) {
+      return `Failed to get page info: ${error}`;
+    }
+  }
+
   async scrapeItemByName(
     appId: string,
     itemName: string,
@@ -43,18 +88,108 @@ export class SteamMarketScraper {
 
         console.log(`Navigating to: ${itemUrl}`);
         await page.goto(itemUrl, {
-          waitUntil: "networkidle2",
+          waitUntil: "networkidle0",
           timeout: 30000,
         });
 
-        // Wait for the page to load
-        await page.waitForSelector(".market_listing_largeimage", {
-          timeout: 15000,
+        // Give the page more time to fully load JavaScript
+        console.log("Waiting for page to fully load...");
+        await this.delay(3000);
+
+        // Scroll the page to trigger any lazy-loading
+        console.log("Scrolling to trigger lazy-loaded elements...");
+        await page.evaluate(() => {
+          window.scrollTo(0, 300);
+        });
+        await this.delay(1000);
+        await page.evaluate(() => {
+          window.scrollTo(0, 0);
+        });
+        await this.delay(1000);
+
+        // Check if we're on an age gate or error page
+        const pageState = await page.evaluate(() => {
+          return {
+            hasAgeGate: !!document.querySelector(".agegate_birthday_selector"),
+            hasError: !!document.querySelector(".error_ctn"),
+            currentUrl: window.location.href,
+          };
         });
 
-        // Wait for order book to load (buy/sell orders load via AJAX)
-        console.log("Waiting for order book to load...");
+        if (pageState.hasAgeGate) {
+          console.log("Age gate detected, submitting age verification...");
 
+          // Try to submit the age gate
+          try {
+            await page.evaluate(() => {
+              const viewButton = document.querySelector(
+                "#view_product_page_btn"
+              ) as HTMLElement;
+              if (viewButton) viewButton.click();
+            });
+            await this.delay(2000);
+          } catch (ageError) {
+            console.warn("Could not bypass age gate automatically");
+          }
+        }
+
+        if (pageState.hasError) {
+          const debugInfo = await this.debugPageState(page);
+          throw new Error(`Steam error page detected. Page info: ${debugInfo}`);
+        }
+
+        // Wait for market content to load - use multiple selector strategies
+        console.log("Waiting for market listing to load...");
+
+        // Try multiple selectors for confirming page loaded
+        const selectors = [
+          ".market_listing_largeimage",
+          ".market_listing_item_img",
+          ".market_page_fullwidth",
+          ".market_listing_nav",
+          "#largeiteminfo",
+        ];
+
+        let elementFound = false;
+        for (const selector of selectors) {
+          try {
+            await page.waitForSelector(selector, {
+              timeout: 5000,
+              visible: true,
+            });
+            console.log(`✓ Found element: ${selector}`);
+            elementFound = true;
+            break;
+          } catch (e) {
+            console.log(`✗ Selector not found: ${selector}`);
+          }
+        }
+
+        if (!elementFound) {
+          // Last resort: check if the page has the item name in the title
+          const hasCorrectTitle = await page.evaluate(() => {
+            return document.title.includes("Listings for");
+          });
+
+          if (hasCorrectTitle) {
+            console.log("Page loaded but using alternative verification method");
+            elementFound = true;
+          }
+        }
+
+        if (!elementFound) {
+          // If main selector fails, check page state and provide detailed error
+          const debugInfo = await this.debugPageState(page);
+          console.error("Failed to find market listing. Debug info:", debugInfo);
+
+          throw new Error(
+            `Market listing not found. The page may have redirected or Steam is blocking the request. Debug info: ${debugInfo}`
+          );
+        }
+
+        console.log("Market listing found, waiting for order book...");
+
+        // Wait for order book to load (buy/sell orders load via AJAX)
         // Wait a bit for AJAX to start loading
         await this.delay(2000);
 
@@ -99,14 +234,18 @@ export class SteamMarketScraper {
           console.log(`Waiting ${retryDelay}ms before retry...`);
           await this.delay(retryDelay);
 
-          // Optionally reload the page for a fresh start
-          try {
-            await page.reload({
-              waitUntil: "networkidle2",
-              timeout: 10000,
-            });
-          } catch (reloadError) {
-            console.warn("Failed to reload page, continuing anyway...");
+          // For next attempt, try going to Steam homepage first to establish session
+          if (attempt === 1) {
+            console.log("Establishing Steam session before retry...");
+            try {
+              await page.goto("https://steamcommunity.com/market/", {
+                waitUntil: "domcontentloaded",
+                timeout: 10000,
+              });
+              await this.delay(1000);
+            } catch (sessionError) {
+              console.warn("Failed to establish session, continuing anyway...");
+            }
           }
         }
       }

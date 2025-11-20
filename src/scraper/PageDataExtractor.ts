@@ -20,23 +20,62 @@ export class PageDataExtractor {
         return text.trim().replace(/\s+/g, " ");
       };
 
-      // Get item name
-      const itemNameElement = document.querySelector(
-        ".market_listing_largeimage img"
-      ) as HTMLImageElement;
-      const itemName = itemNameElement?.alt || "";
+      // Get item name with multiple fallback selectors
+      let itemName = "";
+      const itemImgSelectors = [
+        ".market_listing_largeimage img",
+        ".market_listing_item_img img",
+        ".market_listing_nav img",
+        "img.market_listing_item_img",
+      ];
 
-      // Get lowest price
-      const lowestPriceElement = document.querySelector(
-        ".market_listing_price_with_fee"
-      );
-      const lowestPrice = cleanPrice(lowestPriceElement?.textContent);
+      for (const selector of itemImgSelectors) {
+        const element = document.querySelector(selector) as HTMLImageElement;
+        if (element?.alt) {
+          itemName = element.alt;
+          break;
+        }
+      }
 
-      // Get volume (number sold in last 24 hours)
-      const volumeElement = document.querySelector(
-        ".market_commodity_orders_block:nth-child(2) span"
-      );
-      const volume = cleanPrice(volumeElement?.textContent);
+      // If still no name, try to get it from the page title or meta tags
+      if (!itemName) {
+        const titleMatch = document.title.match(/Steam Community Market :: Listings for (.+)/);
+        if (titleMatch) {
+          itemName = titleMatch[1];
+        }
+      }
+
+      // Get lowest price with fallback selectors
+      let lowestPrice = "N/A";
+      const priceSelectors = [
+        ".market_listing_price_with_fee",
+        ".market_listing_price",
+        ".normal_price",
+      ];
+
+      for (const selector of priceSelectors) {
+        const element = document.querySelector(selector);
+        if (element?.textContent) {
+          lowestPrice = cleanPrice(element.textContent);
+          break;
+        }
+      }
+
+      // Get volume (number sold in last 24 hours) with fallbacks
+      let volume = "N/A";
+      const volumeSelectors = [
+        ".market_commodity_orders_block:nth-child(2) span",
+        ".market_commodity_orders_header_promote",
+        ".market_commodity_orders_block span",
+      ];
+
+      for (const selector of volumeSelectors) {
+        const element = document.querySelector(selector);
+        if (element?.textContent && element.textContent.includes("sold")) {
+          volume = cleanPrice(element.textContent);
+          break;
+        }
+      }
 
       // Get highest buy order (first row in buy orders table)
       let highestBuyOrder: { price: string; quantity: string } | null =
